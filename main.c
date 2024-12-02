@@ -11,19 +11,22 @@ typedef struct StatData {
     unsigned int mode:3;
 } StatData;
 
+#define DEFAULT_MAX 10
+
 void showHelp() {
     printf("usage:\n"
-        "    random <N> <filename> - writes N random records of type StatData to file\n"
-        "    load <filename> - load records of type StatData from file and print them\n"
-        "    sort <filename> - load records from file, sort them and print\n"
-        "    join <filename1> <filename2> - join two files by field 'id'\n"
-        "    \n");
+        "    random <N> <filename> [<max>] - writes N random records of type StatData to file\n"
+        "    load <filename> [<max>] - load records of type StatData from file and print them\n"
+        "    sort <filename> [<max>] - load records from file, sort them and print\n"
+        "    join <filename1> <filename2> [<filename3>] [<max>] - join two files by field 'id' and put result to filename3\n"
+        "    \n"
+        "  max - count of first lines for printing, default = %i\n", DEFAULT_MAX);
 }
 
-void printDump(StatData *pStatData, size_t count) {
-    // заполняет массив p случайными данными в количестве count записей
-    for(size_t i = 0; i < count; i++) {
-        printf("id=0x%08x, count=%i, cost=%.3e, primary=%c, mode=%03b\n",
+void printDump(StatData *pStatData, size_t count, size_t max) {
+    // печатает массив p в количестве count записей, но не более max записей
+    for(size_t i = 0; i < count && i < max; i++) {
+        printf("id=0x%08lx, count=%i, cost=%.3e, primary=%c, mode=%03b\n",
             pStatData[i].id, pStatData[i].count, pStatData[i].cost, pStatData[i].primary?'y':'n', pStatData[i].mode);
     }
 }
@@ -31,35 +34,33 @@ void printDump(StatData *pStatData, size_t count) {
 void fillDump(StatData *pStatData, size_t count) {
     // заполняет массив p случайными данными в количестве count записей
     for(size_t i = 0; i < count; i++) {
-        pStatData[i].id = rand()%10; // long может принимать значения от -4 млрд до 4 млрд, но здесь просто демонстрация, поэтому будет меньше чисел (от 0 до 2 млрд)
-        pStatData[i].count = rand() % 10;//sizeof(int);
-        // pStatData[i].cost = (float)rand() / 1000.0; // значения от балды
-        pStatData[i].cost = (rand()%20);
+        pStatData[i].id = rand() % 20; // маленький диапазон специально, чтобы были пересечения id
+        pStatData[i].count = rand() % 10; // маленький диапазон, чтобы было легче считать при проверке
+        pStatData[i].cost = rand() % 20;
         pStatData[i].primary = rand() % 2;
         pStatData[i].mode = rand() % 8;
     }
 }
 
+// Напишите функцию для сохранения массива StatData (длина массива произвольная) данных в файл, путь
+// до которого передан в качестве аргумента.
 int StoreDump(StatData *pStatData, size_t count, const char* filename) {
-    // Напишите функцию для сохранения массива StatData (длина массива произвольная) данных в файл, путь
-    // до которого передан в качестве аргумента.
     FILE *f = fopen(filename, "wb");
     if(!f) {
         printf("error of opening file\n");
         return 2;
     }
-    size_t n = fwrite(pStatData, sizeof(StatData), count, f);  // или тут в текстовом человекочитаемом виде надо было писать в файл?
+    size_t n = fwrite(pStatData, sizeof(StatData), count, f); // или тут в текстовом человекочитаемом виде надо было писать в файл?
     if(n != count) {
         printf("error of writing file\n");
         return 3;
     }
     return fclose(f); // не сталкивался я с ошибками закрытия файлов на своей практике,
-                      // так что и тут, думаю, всё будет ок и не буду обрабатывать эту ошибку :)
+                      // так что и тут, думаю, всё будет ок и не буду обрабатывать ошибку, буде она возникнет :)
 }
 
+// Напишите функцию для чтения массива записей StatData из файла (файл сформирован функцией StoreDump).
 int LoadDump(StatData **pStatData, size_t *count, const char* filename) {
-    // Напишите функцию для чтения массива записей StatData из файла (файл сформирован функцией
-    // StoreDump).
     FILE *f = fopen(filename, "rb");
     if(!f) {
         printf("error of opening file\n");
@@ -96,15 +97,15 @@ int compareStatData(const void *pv1, const void *pv2) {
         : p1->primary - p2->primary;
 }
 
+// Напишите функцию, сортирующую два массива StatData в порядке возрастания значения поля cost.
 void SortDump(StatData *pStatData, size_t count) {
-    // Напишите функцию, сортирующую два массива StatData в порядке возрастания значения поля cost.
     // вероятно, в задании опечатка и надо сортировать лишь один массив?
-    // если надо сортировать два массива, то достаточно лишь вызвать функцию сортировки дважды - для каждого массива
+    // если надо сортировать два массива, то достаточно вызвать функцию сортировки дважды, для каждого массива
     // если надо объединить массивы вместе с сортировкой, то не описаны правила объединения
-    // к тому же, далее в тестовом сортировка используется для одного (уже объединённого) массива
+    // к тому же, далее в тестовом задании сортировка используется для одного (уже объединённого) массива
     // поэтому реализую сортировку одного массива
 
-    // воспользуюсь стандартной реализацией быстрой сортировки (если надо, можно написать свою реализацию):
+    // воспользуюсь стандартной реализацией быстрой сортировки (если надо, напишу свою реализацию):
     qsort(pStatData, count, sizeof(StatData), compareStatData);
 }
 
@@ -130,30 +131,24 @@ void JoinDumpSingle(StatData *p, size_t count, StatData **pJoined, size_t *count
     }
 }
 
+// Напишите функцию, объединяющую два массива StatData Произвольной длины так, чтобы масcиве -
+// результате id всех записей был уникален. При объединении записей с одинаковым id:
+// - поля count и cost должны складываться,
+// - поле primary должно иметь значение 0, если хотя бы в одном из элементов оно 0,
+// - поле mode должно иметь максимальное значение из двух представленных.
+// Записей с повторяющимся id может быть произвольное количество.
 int JoinDump(StatData *pStatData1, size_t count1, StatData *pStatData2, size_t count2, StatData **pStatData3, size_t *count3) {
-    // Напишите функцию, объединяющую два массива StatData Произвольной длины так, чтобы масcиве -
-    // результате id всех записей был уникален. При объединении записей с одинаковым id:
-    // - поля count и cost должны складываться,
-    // - поле primary должно иметь значение 0, если хотя бы в одном из элементов оно 0,
-    // - поле mode должно иметь максимальное значение из двух представленных.
-    // Записей с повторяющимся id может быть произвольное количество.
-    // printf("line: %d\n", __LINE__);
     size_t size3 = (count1+count2)*sizeof(StatData);
-    // printf("count1=%d, count2=%d, size=%d\n", count1, count2, size3);
     *pStatData3 = malloc(size3);
     //memset(*pStatData3, 0, size3);
-    // printf("line: %d\n", __LINE__);
 
     if(!pStatData3) {
         printf("malloc error: not enough memory\n");
         return 1;
     }
     *count3 = 0;
-    // printf("line: %d\n", __LINE__);
     JoinDumpSingle(pStatData1, count1, pStatData3, count3);
-    // printf("line: %d\n", __LINE__);
     JoinDumpSingle(pStatData2, count2, pStatData3, count3);
-    // printf("line: %d\n", __LINE__);
     return 0;
 }
 
@@ -165,6 +160,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    // random <N> <filename> [<max>]
     if(!strcmp(argv[1], "random")) {
         if(argc >= 4) {
             size_t n = atoi(argv[2]);
@@ -176,7 +172,10 @@ int main(int argc, char* argv[]) {
                 }
                 //memset(p, 0, n * sizeof(StatData));
                 fillDump(p, n);
-                printDump(p, n);
+
+                size_t max = argc > 4 ? atoi(argv[4]) : 10;
+                printDump(p, n, max);
+
                 int res = StoreDump(p, n, argv[3]);
                 free(p); // в принципе, можно было бы и не освобождать, всё
                          // равно программа заканчивается, всё само подчистится
@@ -185,6 +184,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // load <filename> [<max>]
     if(!strcmp(argv[1], "load")) {
         if(argc >= 3) {
             StatData *p = NULL;
@@ -195,37 +195,48 @@ int main(int argc, char* argv[]) {
                     free(p);
                 return result;
             }
-            printDump(p, n);
+            size_t max = argc > 3 ? atoi(argv[3]) : 10;
+            printDump(p, n, max);
             free(p);
             return 0;
         }
     }
 
+    // sort <filename> [<max>]
     if(!strcmp(argv[1], "sort")) {
         if(argc >= 3) {
             StatData *p = NULL;
             size_t n = 0;
+            size_t max = argc > 3 ? atoi(argv[3]) : 10;
+
             int result = LoadDump(&p, &n, argv[2]);
             if(result) {
                 if(p)
                     free(p);
                 return result;
             }
+
             printf("loaded data:\n");
-            printDump(p, n);
+            printDump(p, n, max);
+
             SortDump(p, n);
+
             printf("after sort:\n");
-            printDump(p, n);
+            printDump(p, n, max);
+
             free(p);
             return 0;
         }
     }
-    
+
+    // join <filename1> <filename2> [<filename3>] [<max>]
     if(!strcmp(argv[1], "join")) {
         if(argc >= 4) {
             // можно было бы p1,p2 и n1,n2 засунуть в массив(-ы), код, возможно, стал бы чуть короче
             StatData *p1 = NULL, *p2 = NULL, *pJoined = NULL;
             size_t n1 = 0, n2 = 0, nJoined = 0;
+
+            size_t max = argc > 5 ? atoi(argv[5]) : 10;
 
             int result = LoadDump(&p1, &n1, argv[2]);
             if(result) {
@@ -234,7 +245,7 @@ int main(int argc, char* argv[]) {
                 return result;
             }
             printf("loaded data (1):\n");
-            printDump(p1, n1);
+            printDump(p1, n1, max);
 
             result = LoadDump(&p2, &n2, argv[3]);
             if(result) {
@@ -245,12 +256,16 @@ int main(int argc, char* argv[]) {
                 return result;
             }
             printf("loaded data (2):\n");
-            printDump(p2, n2);
+            printDump(p2, n2, max);
 
             JoinDump(p1, n1, p2, n2, &pJoined, &nJoined);
             SortDump(pJoined, nJoined);
             printf("joined data:\n");
-            printDump(pJoined, nJoined);
+            printDump(pJoined, nJoined, max);
+
+            if(argc > 4) { // if filenam3 exist
+                StoreDump(pJoined, nJoined, argv[4]);
+            }
 
             free(p1);
             free(p2);
